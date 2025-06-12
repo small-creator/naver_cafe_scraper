@@ -7,6 +7,7 @@ from datetime import datetime
 from flask import Flask, jsonify
 
 app = Flask(__name__)
+app.config['JSON_AS_ASCII'] = False  # 한글 제대로 출력
 
 # 수집된 닉네임 저장용
 collected_nicknames = []
@@ -105,18 +106,28 @@ def get_latest_nicknames():
     """최근 수집된 닉네임 조회"""
     if collected_nicknames:
         latest = collected_nicknames[-1]
-        return jsonify({
+        response = {
             "success": True,
             "nicknames": latest['nicknames'],
             "collected_at": latest['collected_at'],
             "count": latest['count']
-        })
+        }
+        return app.response_class(
+            response=json.dumps(response, ensure_ascii=False, indent=2),
+            status=200,
+            mimetype='application/json; charset=utf-8'
+        )
     else:
-        return jsonify({
+        response = {
             "success": False,
             "message": "아직 수집된 닉네임이 없습니다",
             "nicknames": []
-        })
+        }
+        return app.response_class(
+            response=json.dumps(response, ensure_ascii=False, indent=2),
+            status=200,
+            mimetype='application/json; charset=utf-8'
+        )
 
 @app.route('/all-nicknames')
 def get_all_nicknames():
@@ -134,17 +145,27 @@ def collect_now():
     
     if success and collected_nicknames:
         latest = collected_nicknames[-1]
-        return jsonify({
+        response = {
             "success": True,
             "message": "수집 완료!",
             "nicknames": latest['nicknames'],
             "count": latest['count']
-        })
+        }
+        return app.response_class(
+            response=json.dumps(response, ensure_ascii=False, indent=2),
+            status=200,
+            mimetype='application/json; charset=utf-8'
+        )
     else:
-        return jsonify({
+        response = {
             "success": False,
             "message": "수집 실패"
-        })
+        }
+        return app.response_class(
+            response=json.dumps(response, ensure_ascii=False, indent=2),
+            status=200,
+            mimetype='application/json; charset=utf-8'
+        )
 
 @app.route('/health')
 def health_check():
@@ -165,6 +186,11 @@ if __name__ == "__main__":
     scheduler_thread = threading.Thread(target=run_scheduler, daemon=True)
     scheduler_thread.start()
     
-    # Flask 앱 실행
-    port = int(os.environ.get("PORT", 5000))
-    app.run(host="0.0.0.0", port=port, debug=False)
+    # 프로덕션 환경에서는 Gunicorn이 실행하므로 Flask 개발 서버는 로컬에서만
+    if os.environ.get('RENDER'):
+        # Render 환경에서는 아무것도 하지 않음 (Gunicorn이 처리)
+        pass
+    else:
+        # 로컬 개발 환경에서만 Flask 서버 실행
+        port = int(os.environ.get("PORT", 5000))
+        app.run(host="0.0.0.0", port=port, debug=False)
