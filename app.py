@@ -186,11 +186,6 @@ if __name__ == "__main__":
     scheduler_thread = threading.Thread(target=run_scheduler, daemon=True)
     scheduler_thread.start()
     
-    # 프로덕션 환경에서는 Gunicorn이 실행하므로 Flask 개발 서버는 로컬에서만
-    if os.environ.get('RENDER'):
-        # Render 환경에서는 아무것도 하지 않음 (Gunicorn이 처리)
-        pass
-    else:
-        # 로컬 개발 환경에서만 Flask 서버 실행
-        port = int(os.environ.get("PORT", 5000))
-        app.run(host="0.0.0.0", port=port, debug=False)
+    # Flask 앱 실행 (Gunicorn과 개발서버 모두 대응)
+    port = int(os.environ.get("PORT", 5000))
+    app.run(host="0.0.0.0", port=port, debug=False)
