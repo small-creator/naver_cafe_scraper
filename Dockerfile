@@ -45,8 +45,9 @@ RUN playwright install-deps
 # 애플리케이션 코드 복사
 COPY . .
 
-# 포트 설정 (Railway에서 요구하지만 실제로는 사용하지 않음)
+# 포트 설정
 EXPOSE 8080
+ENV PORT=8080
 
 # 애플리케이션 실행
 CMD ["python", "main.py"]
