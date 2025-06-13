@@ -93,6 +93,8 @@ def run_scheduler():
         time.sleep(60)
 
 # ==================== Browserless NaverCafeManager 클래스 ====================
+# 기존 NaverCafeManager 클래스를 이 코드로 완전히 교체하세요
+
 class NaverCafeManager:
     def __init__(self):
         self.browser = None
@@ -100,18 +102,19 @@ class NaverCafeManager:
         self.context = None
         self.playwright = None
         
-        # Browserless 설정 복구
+        # Browserless 설정
         self.browserless_domain = os.environ.get('BROWSERLESS_PUBLIC_DOMAIN', '')
         self.browserless_token = os.environ.get('BROWSERLESS_TOKEN', '')
         
         if self.browserless_domain:
-            self.playwright_endpoint = f"wss://{self.browserless_domain}/playwright?token={self.browserless_token}"
-            print(f"✅ Browserless 연결 준비: {self.browserless_domain}")
+            # HTTP 방식으로 시도
+            self.browserless_http = f"https://{self.browserless_domain}"
+            print(f"🔄 Browserless HTTP 방식 준비: {self.browserless_domain}")
         else:
-            self.playwright_endpoint = None
-        
+            self.browserless_http = None
+
     async def start_browser(self):
-        """Browserless 서비스에 연결"""
+        """브라우저 시작 - Browserless 우선, 실패시 로컬"""
         if not PLAYWRIGHT_AVAILABLE:
             print("❌ Playwright 모듈이 설치되지 않았습니다")
             return False
@@ -119,82 +122,129 @@ class NaverCafeManager:
         try:
             self.playwright = await async_playwright().start()
             
-            if self.playwright_endpoint:
-                print(f"🔗 Browserless 연결 중: {self.browserless_domain}")
-                
+            # Browserless 시도
+            if self.browserless_http:
                 try:
-                    self.browser = await self.playwright.chromium.connect_over_cdp(
-                        self.playwright_endpoint
-                    )
-                    print("✅ Browserless 연결 성공!")
-                    
+                    success = await self.start_browserless()
+                    if success:
+                        return True
+                    else:
+                        print("🔄 Browserless 실패, 로컬 브라우저로 fallback")
                 except Exception as e:
-                    print(f"❌ Browserless 연결 실패: {e}")
-                    print("🔄 로컬 브라우저로 fallback...")
-                    return await self.start_local_browser()
-            else:
-                print("🔄 Browserless 설정이 없어 로컬 브라우저 사용")
-                return await self.start_local_browser()
+                    print(f"❌ Browserless 오류: {e}, 로컬 브라우저로 fallback")
             
-            # 컨텍스트 설정
-            await self.setup_browser_context()
-            return True
+            # 로컬 브라우저 시도
+            return await self.start_local_browser()
             
         except Exception as e:
-            print(f"❌ 브라우저 시작 실패: {e}")
+            print(f"❌ 브라우저 시작 전체 실패: {e}")
             return False
-    
-    async def start_local_browser(self):
-        """로컬 브라우저 사용 (fallback)"""
+
+    async def start_browserless(self):
+        """Browserless HTTP 방식 연결"""
         try:
+            import requests
+            
+            # 세션 생성
+            session_data = {
+                "timeout": 180000,
+                "viewport": {"width": 1024, "height": 768},
+                "args": ["--no-sandbox", "--disable-dev-shm-usage"]
+            }
+            
+            session_url = f"{self.browserless_http}/sessions?token={self.browserless_token}"
+            
+            response = requests.post(
+                session_url,
+                json=session_data,
+                headers={'Content-Type': 'application/json'},
+                timeout=30
+            )
+            
+            if response.status_code == 200:
+                session_info = response.json()
+                session_id = session_info.get('id')
+                
+                print(f"✅ Browserless 세션 생성: {session_id}")
+                
+                # CDP 연결
+                cdp_url = f"ws://{self.browserless_domain}/sessions/{session_id}?token={self.browserless_token}"
+                
+                self.browser = await self.playwright.chromium.connect_over_cdp(cdp_url)
+                self.context = await self.browser.new_context(
+                    viewport={'width': 1024, 'height': 768},
+                    user_agent='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+                )
+                self.page = await self.context.new_page()
+                
+                print("✅ Browserless 연결 성공!")
+                return True
+            else:
+                print(f"❌ Browserless 세션 생성 실패: {response.status_code}")
+                return False
+                
+        except Exception as e:
+            print(f"❌ Browserless 연결 실패: {e}")
+            return False
+
+    async def start_local_browser(self):
+        """로컬 브라우저 시작"""
+        try:
+            print("🔄 로컬 브라우저 시작")
+            
             self.browser = await self.playwright.chromium.launch(
                 headless=True,
                 args=['--no-sandbox', '--disable-dev-shm-usage']
             )
-            await self.setup_browser_context()
-            print("✅ 로컬 브라우저 시작 성공")
+            
+            self.context = await self.browser.new_context(
+                viewport={'width': 1024, 'height': 768},
+                user_agent='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+            )
+            
+            self.page = await self.context.new_page()
+            
+            print("✅ 로컬 브라우저 시작 성공!")
             return True
+            
         except Exception as e:
             print(f"❌ 로컬 브라우저 시작 실패: {e}")
             return False
-    
-    async def setup_browser_context(self):
-        """브라우저 컨텍스트 설정"""
-        self.context = await self.browser.new_context(
-            viewport={'width': 1024, 'height': 768},
-            user_agent='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
-        )
-        self.page = await self.context.new_page()
 
     async def login_naver(self, username, password):
-        """네이버 로그인"""
+        """간단한 네이버 로그인"""
         try:
             print("🔐 네이버 로그인 시작...")
             
+            # 1. 로그인 페이지로 이동
             await self.page.goto('https://nid.naver.com/nidlogin.login')
             await self.page.wait_for_selector('#id', timeout=10000)
             
+            # 2. 아이디, 비밀번호 입력
             await self.page.fill('#id', username)
             await asyncio.sleep(1)
             await self.page.fill('#pw', password)
             await asyncio.sleep(1)
             
+            # 3. 로그인 버튼 클릭
             await self.page.click('#log\\.login')
             await asyncio.sleep(3)
             
             current_url = self.page.url
+            print(f"로그인 후 URL: {current_url}")
             
-            # 추가 인증 처리
+            # 4. 추가 인증 처리
             if 'auth' in current_url or 'login' in current_url:
                 print("⏳ 추가 인증 대기 중...")
                 timeout_count = 0
-                while timeout_count < 30:
+                while timeout_count < 30:  # 최대 1분 대기
                     await asyncio.sleep(2)
                     current_url = self.page.url
                     if 'naver.com' in current_url and 'login' not in current_url and 'auth' not in current_url:
                         break
                     timeout_count += 1
             
+            # 5. 로그인 성공 확인
             if 'naver.com' in current_url and 'login' not in current_url:
                 print("✅ 네이버 로그인 성공!")
                 return True
@@ -207,8 +257,11 @@ class NaverCafeManager:
             return False
 
     async def get_post_rankings(self, start_date=None):
-        """게시글 멤버 순위 가져오기"""
+        """게시글 순위 조회"""
         try:
+            print("📊 게시글 순위 조회 중...")
+            
+            # 날짜 설정
             if not start_date:
                 today = datetime.now()
                 if today.month == 1:
@@ -217,15 +270,18 @@ class NaverCafeManager:
                     last_month = today.replace(month=today.month - 1, day=1)
                 start_date = last_month.strftime('%Y-%m-%d')
             
+            # API URL
             api_url = (
                 f"https://cafe.stat.naver.com/api/cafe/{CAFE_ID}/rank/memberCreate"
                 f"?service=CAFE&timeDimension=MONTH&startDate={start_date}"
                 f"&memberId=%EB%A9%A4%EB%B2%84&exclude=member%2Cboard%2CdashBoard"
             )
             
+            # API 페이지로 이동
             await self.page.goto(api_url)
             await asyncio.sleep(2)
             
+            # JSON 데이터 추출
             json_data = await self.page.evaluate('''() => {
                 try {
                     const pre = document.querySelector('pre');
@@ -241,14 +297,15 @@ class NaverCafeManager:
             if json_data:
                 return self.parse_post_stats(json_data)
             else:
+                print("❌ 게시글 순위 데이터 없음")
                 return []
                 
         except Exception as e:
             print(f"❌ 게시글 순위 조회 오류: {e}")
             return []
-    
+
     def parse_post_stats(self, data):
-        """게시글 API 응답 데이터 파싱"""
+        """게시글 순위 데이터 파싱 (naver_cafe_scraper.py 로직 사용)"""
         try:
             collected_members = []
             
@@ -267,7 +324,10 @@ class NaverCafeManager:
                         
                         member_infos = member_infos_nested[0] if member_infos_nested and len(member_infos_nested) > 0 else []
                         
-                        for i in range(min(len(member_ids), 5)):
+                        for i in range(len(member_ids)):
+                            if len(collected_members) >= 5:  # 상위 5명
+                                break
+                                
                             try:
                                 member_id = member_ids[i] if i < len(member_ids) else ''
                                 count = counts[i] if i < len(counts) else 0
@@ -283,6 +343,7 @@ class NaverCafeManager:
                                     nick_name = member_info.get('nickName', '')
                                     member_level = member_info.get('memberLevelName', '')
                                     
+                                    # 제외 조건
                                     should_exclude = (
                                         nick_name == '수산나' or 
                                         member_level == '제휴업체'
@@ -304,15 +365,19 @@ class NaverCafeManager:
                             except Exception as e:
                                 continue
             
-            return collected_members[:5]
+            print(f"✅ 게시글 순위 파싱 완료: {len(collected_members)}명")
+            return collected_members
             
         except Exception as e:
             print(f"❌ 게시글 데이터 파싱 오류: {e}")
             return []
 
     async def get_comment_rankings(self, start_date=None):
-        """댓글 멤버 순위 가져오기"""
+        """댓글 순위 조회"""
         try:
+            print("💬 댓글 순위 조회 중...")
+            
+            # 날짜 설정
             if not start_date:
                 today = datetime.now()
                 if today.month == 1:
@@ -321,15 +386,18 @@ class NaverCafeManager:
                     last_month = today.replace(month=today.month - 1, day=1)
                 start_date = last_month.strftime('%Y-%m-%d')
             
+            # API URL
             api_url = (
                 f"https://cafe.stat.naver.com/api/cafe/{CAFE_ID}/rank/memberComment"
                 f"?service=CAFE&timeDimension=MONTH&startDate={start_date}"
                 f"&memberId=%EB%A9%A4%EB%B2%84&exclude=member%2Cboard%2CdashBoard"
             )
             
+            # API 페이지로 이동
             await self.page.goto(api_url)
             await asyncio.sleep(2)
             
+            # JSON 데이터 추출
             json_data = await self.page.evaluate('''() => {
                 try {
                     const pre = document.querySelector('pre');
@@ -345,6 +413,7 @@ class NaverCafeManager:
             if json_data:
                 return self.parse_comment_stats(json_data)
             else:
+                print("❌ 댓글 순위 데이터 없음")
                 return []
                 
         except Exception as e:
@@ -352,7 +421,7 @@ class NaverCafeManager:
             return []
 
     def parse_comment_stats(self, data):
-        """댓글 API 응답 데이터 파싱"""
+        """댓글 순위 데이터 파싱 (naver_cafe_scraper.py 로직 사용)"""
         try:
             collected_members = []
             
@@ -371,7 +440,10 @@ class NaverCafeManager:
                         
                         member_infos = member_infos_nested[0] if member_infos_nested and len(member_infos_nested) > 0 else []
                         
-                        for i in range(min(len(member_ids), 3)):
+                        for i in range(len(member_ids)):
+                            if len(collected_members) >= 3:  # 상위 3명
+                                break
+                                
                             try:
                                 member_id = member_ids[i] if i < len(member_ids) else ''
                                 count = counts[i] if i < len(counts) else 0
@@ -387,6 +459,7 @@ class NaverCafeManager:
                                     nick_name = member_info.get('nickName', '')
                                     member_level = member_info.get('memberLevelName', '')
                                     
+                                    # 제외 조건
                                     should_exclude = (
                                         nick_name == '수산나' or 
                                         member_level == '제휴업체'
@@ -408,7 +481,8 @@ class NaverCafeManager:
                             except Exception as e:
                                 continue
             
-            return collected_members[:3]
+            print(f"✅ 댓글 순위 파싱 완료: {len(collected_members)}명")
+            return collected_members
             
         except Exception as e:
             print(f"❌ 댓글 데이터 파싱 오류: {e}")
