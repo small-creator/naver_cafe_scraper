@@ -104,10 +104,9 @@ class NaverCafeManager:
         self.browserless_domain = os.environ.get('BROWSERLESS_PUBLIC_DOMAIN', '')
         self.browserless_token = os.environ.get('BROWSERLESS_TOKEN', '')
         
-        if self.browserless_domain:
-            self.playwright_endpoint = f"wss://{self.browserless_domain}/playwright?token={self.browserless_token}"
-        else:
-            self.playwright_endpoint = None
+        # 🔧 Browserless 연결 문제로 인해 로컬 브라우저 강제 사용
+        self.playwright_endpoint = None
+        print("⚠️ Browserless 우회, 로컬 브라우저 사용")
         
     async def start_browser(self):
         """Browserless 서비스에 연결"""
