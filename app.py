@@ -110,102 +110,189 @@ class NaverCafeManager:
         else:
             self.browserless_http = None
 
-    async def start_browser(self):
-        """브라우저 시작"""
-        if not PLAYWRIGHT_AVAILABLE:
-            print("❌ Playwright 모듈이 설치되지 않았습니다")
-            return False
+   # NaverCafeManager의 start_browser 메서드를 다음과 같이 교체하세요
+
+async def start_browser(self):
+    """Browserless 전용 연결 (로컬 브라우저 제거)"""
+    if not PLAYWRIGHT_AVAILABLE:
+        print("❌ Playwright 모듈이 설치되지 않았습니다")
+        return False
+        
+    try:
+        self.playwright = await async_playwright().start()
+        
+        # Browserless만 시도 (로컬 fallback 제거)
+        if self.browserless_http:
+            print(f"🔗 Browserless 전용 연결 시도: {self.browserless_domain}")
             
-        try:
-            self.playwright = await async_playwright().start()
+            # 여러 연결 방식 시도
+            connection_methods = [
+                self.try_private_connection,
+                self.try_public_connection,
+                self.try_alternative_connection
+            ]
             
-            # Browserless 시도
-            if self.browserless_http:
+            for method in connection_methods:
                 try:
-                    success = await self.start_browserless()
+                    success = await method()
                     if success:
                         return True
-                    else:
-                        print("🔄 Browserless 실패, 로컬 브라우저로 fallback")
                 except Exception as e:
-                    print(f"❌ Browserless 오류: {e}, 로컬 브라우저로 fallback")
+                    print(f"연결 방식 실패: {e}")
+                    continue
             
-            # 로컬 브라우저 시도
-            return await self.start_local_browser()
-            
-        except Exception as e:
-            print(f"❌ 브라우저 시작 전체 실패: {e}")
+            print("❌ 모든 Browserless 연결 방식 실패")
             return False
-
-    async def start_browserless(self):
-        """Browserless HTTP 방식 연결"""
-        try:
-            import requests
-            
-            session_data = {
-                "timeout": 180000,
-                "viewport": {"width": 1024, "height": 768},
-                "args": ["--no-sandbox", "--disable-dev-shm-usage"]
-            }
-            
-            session_url = f"{self.browserless_http}/sessions?token={self.browserless_token}"
-            
-            response = requests.post(
-                session_url,
-                json=session_data,
-                headers={'Content-Type': 'application/json'},
-                timeout=30
-            )
-            
-            if response.status_code == 200:
-                session_info = response.json()
-                session_id = session_info.get('id')
-                
-                print(f"✅ Browserless 세션 생성: {session_id}")
-                
-                cdp_url = f"ws://{self.browserless_domain}/sessions/{session_id}?token={self.browserless_token}"
-                
-                self.browser = await self.playwright.chromium.connect_over_cdp(cdp_url)
-                self.context = await self.browser.new_context(
-                    viewport={'width': 1024, 'height': 768},
-                    user_agent='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-                )
-                self.page = await self.context.new_page()
-                
-                print("✅ Browserless 연결 성공!")
-                return True
-            else:
-                print(f"❌ Browserless 세션 생성 실패: {response.status_code}")
-                return False
-                
-        except Exception as e:
-            print(f"❌ Browserless 연결 실패: {e}")
+        else:
+            print("❌ Browserless 설정이 없습니다")
             return False
+            
+    except Exception as e:
+        print(f"❌ 브라우저 시작 전체 실패: {e}")
+        return False
 
-    async def start_local_browser(self):
-        """로컬 브라우저 시작"""
-        try:
-            print("🔄 로컬 브라우저 시작")
+async def try_private_connection(self):
+    """Private 네트워크 연결 시도"""
+    try:
+        import requests
+        
+        # Railway 내부 네트워크 사용
+        private_url = "http://browserless.railway.internal:3000"
+        
+        session_data = {
+            "timeout": 180000,
+            "viewport": {"width": 1024, "height": 768},
+            "args": ["--no-sandbox", "--disable-dev-shm-usage"]
+        }
+        
+        print(f"Private 연결 시도: {private_url}")
+        
+        response = requests.post(
+            f"{private_url}/sessions",
+            json=session_data,
+            headers={'Content-Type': 'application/json'},
+            timeout=30
+        )
+        
+        if response.status_code == 200:
+            session_info = response.json()
+            session_id = session_info.get('id')
             
-            self.browser = await self.playwright.chromium.launch(
-                headless=True,
-                args=['--no-sandbox', '--disable-dev-shm-usage']
-            )
+            print(f"✅ Private 세션 생성: {session_id}")
             
+            cdp_url = f"ws://browserless.railway.internal:3000/sessions/{session_id}"
+            
+            self.browser = await self.playwright.chromium.connect_over_cdp(cdp_url)
             self.context = await self.browser.new_context(
                 viewport={'width': 1024, 'height': 768},
                 user_agent='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
             )
-            
             self.page = await self.context.new_page()
             
-            print("✅ 로컬 브라우저 시작 성공!")
+            print("✅ Private Browserless 연결 성공!")
             return True
-            
-        except Exception as e:
-            print(f"❌ 로컬 브라우저 시작 실패: {e}")
+        else:
+            print(f"❌ Private 세션 생성 실패: {response.status_code}")
             return False
+            
+    except Exception as e:
+        print(f"❌ Private 연결 실패: {e}")
+        return False
 
+async def try_public_connection(self):
+    """Public 엔드포인트 연결 시도"""
+    try:
+        import requests
+        
+        session_data = {
+            "timeout": 180000,
+            "viewport": {"width": 1024, "height": 768},
+            "args": ["--no-sandbox", "--disable-dev-shm-usage"]
+        }
+        
+        session_url = f"{self.browserless_http}/sessions?token={self.browserless_token}"
+        print(f"Public 연결 시도: {session_url}")
+        
+        response = requests.post(
+            session_url,
+            json=session_data,
+            headers={'Content-Type': 'application/json'},
+            timeout=30
+        )
+        
+        if response.status_code == 200:
+            session_info = response.json()
+            session_id = session_info.get('id')
+            
+            print(f"✅ Public 세션 생성: {session_id}")
+            
+            cdp_url = f"ws://{self.browserless_domain}/sessions/{session_id}?token={self.browserless_token}"
+            
+            self.browser = await self.playwright.chromium.connect_over_cdp(cdp_url)
+            self.context = await self.browser.new_context(
+                viewport={'width': 1024, 'height': 768},
+                user_agent='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+            )
+            self.page = await self.context.new_page()
+            
+            print("✅ Public Browserless 연결 성공!")
+            return True
+        else:
+            print(f"❌ Public 세션 생성 실패: {response.status_code} - {response.text}")
+            return False
+            
+    except Exception as e:
+        print(f"❌ Public 연결 실패: {e}")
+        return False
+
+async def try_alternative_connection(self):
+    """대안 연결 방식"""
+    try:
+        import requests
+        
+        # 다른 엔드포인트들 시도
+        alternative_endpoints = [
+            f"http://browserless:3000",
+            f"http://localhost:3000"
+        ]
+        
+        for endpoint in alternative_endpoints:
+            try:
+                print(f"대안 연결 시도: {endpoint}")
+                
+                response = requests.post(
+                    f"{endpoint}/sessions",
+                    json={
+                        "timeout": 180000,
+                        "viewport": {"width": 1024, "height": 768}
+                    },
+                    timeout=10
+                )
+                
+                if response.status_code == 200:
+                    session_info = response.json()
+                    session_id = session_info.get('id')
+                    
+                    cdp_url = f"ws://{endpoint.replace('http://', '')}/sessions/{session_id}"
+                    
+                    self.browser = await self.playwright.chromium.connect_over_cdp(cdp_url)
+                    self.context = await self.browser.new_context()
+                    self.page = await self.context.new_page()
+                    
+                    print(f"✅ 대안 연결 성공: {endpoint}")
+                    return True
+                    
+            except Exception as e:
+                print(f"대안 연결 실패 ({endpoint}): {e}")
+                continue
+        
+        return False
+        
+    except Exception as e:
+        print(f"❌ 대안 연결 전체 실패: {e}")
+        return False
+
+# start_local_browser 메서드 제거 (사용하지 않음)
     async def login_naver(self, username, password):
         """네이버 로그인"""
         try:
