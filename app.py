@@ -844,62 +844,46 @@ def health_check():
 
 # ==================== 디버깅 함수들 (추가) ====================
 
-async def test_browser_connection():
-    """브라우저 연결만 테스트"""
+sync def test_browser_connection():
+    """브라우저 연결만 테스트 (새로운 NaverCafeManager용)"""
     naver_manager = NaverCafeManager()
     
     try:
         print("🔧 브라우저 연결 테스트 시작...")
         
-        # 1. Playwright 시작 테스트
-        naver_manager.playwright = await async_playwright().start()
-        print("✅ Playwright 시작 성공")
+        # 브라우저 시작 테스트
+        success = await naver_manager.start_browser()
         
-        # 2. Browserless 연결 테스트
-        if naver_manager.playwright_endpoint:
-            print(f"🔗 Browserless 연결 시도: {naver_manager.browserless_domain}")
-            try:
-                naver_manager.browser = await naver_manager.playwright.chromium.connect_over_cdp(
-                    naver_manager.playwright_endpoint
-                )
-                print("✅ Browserless 연결 성공!")
-                
-                # 3. 간단한 페이지 이동 테스트
-                naver_manager.context = await naver_manager.browser.new_context()
-                naver_manager.page = await naver_manager.context.new_page()
-                
-                await naver_manager.page.goto('https://www.naver.com', timeout=30000)
-                title = await naver_manager.page.title()
-                print(f"✅ 페이지 이동 성공: {title}")
-                
-                return {
-                    "playwright": "✅ 성공",
-                    "browserless": "✅ 성공", 
-                    "page_load": f"✅ 성공 ({title})",
-                    "status": "success"
-                }
-                
-            except Exception as e:
-                print(f"❌ Browserless 연결 실패: {e}")
-                return {
-                    "playwright": "✅ 성공",
-                    "browserless": f"❌ 실패: {str(e)}",
-                    "page_load": "❌ 테스트 안됨",
-                    "status": "browserless_failed"
-                }
-        else:
+        if success:
+            print("✅ 브라우저 시작 성공")
+            
+            # 간단한 페이지 이동 테스트
+            await naver_manager.page.goto('https://www.naver.com', timeout=30000)
+            title = await naver_manager.page.title()
+            print(f"✅ 페이지 이동 성공: {title}")
+            
+            # Browserless 사용 여부 확인
+            browser_type = "Browserless" if naver_manager.browserless_http else "로컬 브라우저"
+            
             return {
                 "playwright": "✅ 성공",
-                "browserless": "❌ 설정 없음",
-                "page_load": "❌ 테스트 안됨", 
-                "status": "no_config"
+                "browser_type": browser_type,
+                "page_load": f"✅ 성공 ({title})",
+                "status": "success"
+            }
+        else:
+            return {
+                "playwright": "❌ 실패",
+                "browser_type": "알 수 없음",
+                "page_load": "❌ 테스트 안됨",
+                "status": "browser_start_failed"
             }
             
     except Exception as e:
-        print(f"❌ 전체 테스트 실패: {e}")
+        print(f"❌ 브라우저 테스트 실패: {e}")
         return {
             "playwright": f"❌ 실패: {str(e)}",
-            "browserless": "❌ 테스트 안됨",
+            "browser_type": "알 수 없음",
             "page_load": "❌ 테스트 안됨",
             "status": "failed"
         }
@@ -907,13 +891,13 @@ async def test_browser_connection():
         await naver_manager.close()
 
 async def test_naver_login():
-    """네이버 로그인만 테스트"""
+    """네이버 로그인만 테스트 (새로운 NaverCafeManager용)"""
     naver_manager = NaverCafeManager()
     
     try:
         print("🔐 네이버 로그인 테스트 시작...")
         
-        # 브라우저 시작
+        # 1. 브라우저 시작
         if not await naver_manager.start_browser():
             return {
                 "browser_start": "❌ 실패",
@@ -923,19 +907,19 @@ async def test_naver_login():
         
         print("✅ 브라우저 시작 성공")
         
-        # 네이버 메인 페이지 접근 테스트
+        # 2. 네이버 메인 페이지 접근 테스트
         await naver_manager.page.goto('https://www.naver.com', timeout=30000)
         print("✅ 네이버 메인 페이지 접근 성공")
         
-        # 로그인 페이지 접근 테스트
+        # 3. 로그인 페이지 접근 테스트
         await naver_manager.page.goto('https://nid.naver.com/nidlogin.login', timeout=30000)
         
-        # 로그인 폼 요소 확인
+        # 4. 로그인 폼 요소 확인
         await naver_manager.page.wait_for_selector('#id', timeout=10000)
         await naver_manager.page.wait_for_selector('#pw', timeout=10000)
         print("✅ 로그인 폼 요소 확인됨")
         
-        # 실제 로그인 시도
+        # 5. 실제 로그인 시도
         username = os.environ.get('NAVER_USERNAME', '')
         password = os.environ.get('NAVER_PASSWORD', '')
         
@@ -947,35 +931,93 @@ async def test_naver_login():
                 "status": "no_credentials"
             }
         
-        await naver_manager.page.fill('#id', username)
-        await asyncio.sleep(1)
-        await naver_manager.page.fill('#pw', password)
-        await asyncio.sleep(1)
+        # 6. 로그인 실행
+        login_success = await naver_manager.login_naver(username, password)
         
-        await naver_manager.page.click('#log\\.login')
-        await asyncio.sleep(5)
-        
-        current_url = naver_manager.page.url
-        print(f"로그인 후 URL: {current_url}")
-        
-        if 'naver.com' in current_url and 'login' not in current_url:
+        if login_success:
             return {
                 "browser_start": "✅ 성공",
                 "form_elements": "✅ 성공", 
                 "login": "✅ 성공",
-                "final_url": current_url,
+                "final_url": naver_manager.page.url,
                 "status": "success"
             }
         else:
             return {
                 "browser_start": "✅ 성공",
                 "form_elements": "✅ 성공",
-                "login": f"❌ 실패 (URL: {current_url})",
+                "login": f"❌ 실패 (URL: {naver_manager.page.url})",
                 "status": "login_failed"
             }
             
     except Exception as e:
         print(f"❌ 네이버 로그인 테스트 실패: {e}")
+        return {
+            "error": str(e),
+            "status": "error"
+        }
+    finally:
+        await naver_manager.close()
+
+async def test_full_ranking_process():
+    """전체 멤버 순위 조회 프로세스 테스트"""
+    naver_manager = NaverCafeManager()
+    
+    try:
+        print("🏆 전체 순위 조회 프로세스 테스트 시작...")
+        
+        # 1. 브라우저 시작
+        if not await naver_manager.start_browser():
+            return {
+                "browser_start": "❌ 실패",
+                "login": "❌ 테스트 안됨",
+                "post_rankings": "❌ 테스트 안됨",
+                "comment_rankings": "❌ 테스트 안됨",
+                "status": "browser_failed"
+            }
+        
+        # 2. 네이버 로그인
+        username = os.environ.get('NAVER_USERNAME', '')
+        password = os.environ.get('NAVER_PASSWORD', '')
+        
+        if not username or not password:
+            return {
+                "browser_start": "✅ 성공",
+                "login": "❌ 계정 정보 없음",
+                "post_rankings": "❌ 테스트 안됨",
+                "comment_rankings": "❌ 테스트 안됨",
+                "status": "no_credentials"
+            }
+        
+        login_success = await naver_manager.login_naver(username, password)
+        
+        if not login_success:
+            return {
+                "browser_start": "✅ 성공",
+                "login": "❌ 실패",
+                "post_rankings": "❌ 테스트 안됨",
+                "comment_rankings": "❌ 테스트 안됨",
+                "status": "login_failed"
+            }
+        
+        # 3. 게시글 순위 조회
+        post_rankings = await naver_manager.get_post_rankings()
+        
+        # 4. 댓글 순위 조회
+        comment_rankings = await naver_manager.get_comment_rankings()
+        
+        return {
+            "browser_start": "✅ 성공",
+            "login": "✅ 성공",
+            "post_rankings": f"✅ 성공 ({len(post_rankings)}명)",
+            "comment_rankings": f"✅ 성공 ({len(comment_rankings)}명)",
+            "post_data": post_rankings[:2] if post_rankings else [],  # 상위 2명만 미리보기
+            "comment_data": comment_rankings[:2] if comment_rankings else [],  # 상위 2명만 미리보기
+            "status": "success"
+        }
+        
+    except Exception as e:
+        print(f"❌ 전체 프로세스 테스트 실패: {e}")
         return {
             "error": str(e),
             "status": "error"
@@ -1075,6 +1117,31 @@ def debug_environment():
         mimetype='application/json; charset=utf-8'
     )
 
+@app.route('/debug/full-test')
+def debug_full_test():
+    """전체 프로세스 테스트"""
+    try:
+        result = run_async_task(test_full_ranking_process())
+        return app.response_class(
+            response=json.dumps({
+                "test": "full_ranking_process",
+                "timestamp": datetime.now().isoformat(),
+                "result": result
+            }, ensure_ascii=False, indent=2),
+            status=200,
+            mimetype='application/json; charset=utf-8'
+        )
+    except Exception as e:
+        return app.response_class(
+            response=json.dumps({
+                "test": "full_ranking_process",
+                "error": str(e),
+                "status": "exception"
+            }, ensure_ascii=False, indent=2),
+            status=500,
+            mimetype='application/json; charset=utf-8'
+        )
+        
 # 기존 if __name__ == "__main__": 부분은 그대로 유지하세요
 
 if __name__ == "__main__":
