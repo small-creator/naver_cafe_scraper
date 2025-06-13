@@ -5,6 +5,7 @@ import time
 import threading
 from datetime import datetime
 from flask import Flask, jsonify, render_template
+import os
 
 app = Flask(__name__)
 app.config['JSON_AS_ASCII'] = False  # 한글 제대로 출력
@@ -90,8 +91,10 @@ def run_scheduler():
 @app.route('/')
 def dashboard():
     """메인 대시보드 페이지"""
+    if os.environ.get('DISABLED') == 'true':
+        return '<h1>🔧 서비스 일시 중지됨</h1>'
     return render_template('dashboard.html')
-
+    
 @app.route('/api/status')
 def api_status():
     """대시보드용 상태 API"""
