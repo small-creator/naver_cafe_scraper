@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>네이버 카페 닉네임 수집기</title>
+    <title>네이버 카페 관리 대시보드</title>
     <style>
         * {
             margin: 0;
@@ -20,7 +20,7 @@
         }
 
         .container {
-            max-width: 1200px;
+            max-width: 1400px;
             margin: 0 auto;
             padding: 2rem;
         }
@@ -67,7 +67,7 @@
         .card-title {
             font-size: 1.5rem;
             font-weight: 600;
-            margin-bottom: 1rem;
+            margin-bottom: 1.5rem;
             color: #2d3748;
             display: flex;
             align-items: center;
@@ -116,12 +116,12 @@
             border: none;
             padding: 1rem 2rem;
             border-radius: 12px;
-            font-size: 1.1rem;
+            font-size: 1rem;
             font-weight: 600;
             cursor: pointer;
             transition: all 0.3s ease;
             margin: 0.5rem;
-            min-width: 200px;
+            min-width: 180px;
         }
 
         .btn:hover {
@@ -135,6 +135,10 @@
 
         .btn.secondary {
             background: linear-gradient(135deg, #48bb78 0%, #38a169 100%);
+        }
+
+        .btn.warning {
+            background: linear-gradient(135deg, #ed8936 0%, #dd6b20 100%);
         }
 
         .btn:disabled {
@@ -161,15 +165,95 @@
             animation: fadeInUp 0.5s ease;
         }
 
-        @keyframes fadeInUp {
-            from {
-                opacity: 0;
-                transform: translateY(20px);
-            }
-            to {
-                opacity: 1;
-                transform: translateY(0);
-            }
+        /* 멤버 순위 스타일 */
+        .ranking-card {
+            margin-bottom: 2rem;
+        }
+
+        .ranking-list {
+            margin-top: 1rem;
+        }
+
+        .ranking-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 1rem;
+            margin-bottom: 0.5rem;
+            background: rgba(102, 126, 234, 0.1);
+            border-radius: 12px;
+            border-left: 4px solid #667eea;
+            transition: all 0.3s ease;
+        }
+
+        .ranking-item:hover {
+            background: rgba(102, 126, 234, 0.2);
+            transform: translateX(5px);
+        }
+
+        .ranking-info {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        .ranking-number {
+            background: #667eea;
+            color: white;
+            width: 30px;
+            height: 30px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            font-size: 0.9rem;
+        }
+
+        .ranking-number.gold {
+            background: linear-gradient(135deg, #ffd700 0%, #ffb300 100%);
+            color: #333;
+        }
+
+        .ranking-number.silver {
+            background: linear-gradient(135deg, #c0c0c0 0%, #a0a0a0 100%);
+            color: #333;
+        }
+
+        .ranking-number.bronze {
+            background: linear-gradient(135deg, #cd7f32 0%, #b8860b 100%);
+            color: white;
+        }
+
+        .member-info {
+            flex: 1;
+        }
+
+        .member-name {
+            font-weight: 600;
+            font-size: 1.1rem;
+            color: #2d3748;
+        }
+
+        .member-id {
+            font-size: 0.9rem;
+            color: #718096;
+            margin-top: 0.2rem;
+        }
+
+        .member-stats {
+            text-align: right;
+        }
+
+        .stat-count {
+            font-size: 1.2rem;
+            font-weight: 700;
+            color: #667eea;
+        }
+
+        .stat-type {
+            font-size: 0.8rem;
+            color: #718096;
         }
 
         .last-update {
@@ -198,6 +282,17 @@
             100% { transform: rotate(360deg); }
         }
 
+        @keyframes fadeInUp {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
         .empty-state {
             text-align: center;
             padding: 3rem;
@@ -216,6 +311,11 @@
             font-size: 0.9rem;
         }
 
+        .section-divider {
+            margin: 3rem 0;
+            border-top: 2px solid rgba(255, 255, 255, 0.2);
+        }
+
         @media (max-width: 768px) {
             .container {
                 padding: 1rem;
@@ -231,7 +331,17 @@
             
             .btn {
                 min-width: 150px;
-                font-size: 1rem;
+                font-size: 0.9rem;
+            }
+
+            .ranking-item {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 0.5rem;
+            }
+
+            .member-stats {
+                text-align: left;
             }
         }
     </style>
@@ -239,10 +349,11 @@
 <body>
     <div class="container">
         <div class="header">
-            <h1>🎯 네이버 카페 닉네임 수집기</h1>
-            <p>실시간으로 네이버 카페에서 닉네임을 수집합니다</p>
+            <h1>🎯 네이버 카페 관리 대시보드</h1>
+            <p>실시간 닉네임 수집 및 멤버 순위 관리</p>
         </div>
 
+        <!-- 기본 통계 -->
         <div class="dashboard-grid">
             <div class="card status-card">
                 <div class="card-title">
@@ -266,11 +377,12 @@
             </div>
         </div>
 
+        <!-- 제어 패널 -->
         <div class="dashboard-grid">
             <div class="card controls-card">
-                <div class="card-title">⚡ 제어 패널</div>
+                <div class="card-title">⚡ 기본 제어</div>
                 <button class="btn" id="collect-btn" onclick="collectNow()">
-                    🔄 지금 수집하기
+                    🔄 닉네임 수집
                 </button>
                 <button class="btn secondary" onclick="refreshData()">
                     📊 데이터 새로고침
@@ -280,12 +392,57 @@
                 </div>
             </div>
 
+            <div class="card controls-card">
+                <div class="card-title">🏆 멤버 순위 관리</div>
+                <button class="btn warning" id="ranking-btn" onclick="fetchRankings()">
+                    📈 순위 조회
+                </button>
+                <button class="btn secondary" onclick="refreshRankings()">
+                    🔄 순위 새로고침
+                </button>
+                <div class="last-update" id="ranking-update">
+                    순위 업데이트: 아직 조회되지 않음
+                </div>
+            </div>
+        </div>
+
+        <div class="section-divider"></div>
+
+        <!-- 멤버 순위 섹션 -->
+        <div class="dashboard-grid">
+            <!-- 게시글 순위 -->
+            <div class="card ranking-card">
+                <div class="card-title">🏆 게시글 순위 (월간)</div>
+                <div class="ranking-list" id="post-rankings">
+                    <div class="empty-state">
+                        <div class="empty-state-icon">📝</div>
+                        <p>게시글 순위 데이터가 없습니다.<br>"순위 조회" 버튼을 눌러주세요!</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 댓글 순위 -->
+            <div class="card ranking-card">
+                <div class="card-title">💬 댓글 순위 (월간)</div>
+                <div class="ranking-list" id="comment-rankings">
+                    <div class="empty-state">
+                        <div class="empty-state-icon">💭</div>
+                        <p>댓글 순위 데이터가 없습니다.<br>"순위 조회" 버튼을 눌러주세요!</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="section-divider"></div>
+
+        <!-- 최근 닉네임 -->
+        <div class="dashboard-grid">
             <div class="card">
                 <div class="card-title">🏷️ 최근 수집된 닉네임</div>
                 <div class="nicknames-grid" id="nicknames-container">
                     <div class="empty-state">
                         <div class="empty-state-icon">🔍</div>
-                        <p>아직 수집된 닉네임이 없습니다.<br>위의 "지금 수집하기" 버튼을 눌러보세요!</p>
+                        <p>아직 수집된 닉네임이 없습니다.<br>위의 "닉네임 수집" 버튼을 눌러보세요!</p>
                     </div>
                 </div>
             </div>
@@ -293,11 +450,12 @@
     </div>
 
     <div class="footer">
-        <p>🚀 Railway로 배포된 Flask 애플리케이션 | 1시간마다 자동 수집</p>
+        <p>🚀 Railway로 배포된 Flask 애플리케이션 | 자동 수집 + 멤버 순위 관리</p>
     </div>
 
     <script>
         let isCollecting = false;
+        let isFetchingRankings = false;
 
         // 페이지 로드 시 데이터 가져오기
         document.addEventListener('DOMContentLoaded', function() {
@@ -311,13 +469,21 @@
                 const response = await fetch('/api/status');
                 const data = await response.json();
                 
-                // 통계 업데이트
+                // 기본 통계 업데이트
                 document.getElementById('total-collections').textContent = data.total_collections;
                 document.getElementById('total-nicknames').textContent = data.total_nicknames;
                 document.getElementById('unique-nicknames').textContent = data.unique_nicknames;
                 
                 // 닉네임 표시
                 displayNicknames(data.recent_nicknames);
+                
+                // 멤버 순위 표시
+                if (data.member_rankings && data.member_rankings.last_updated) {
+                    displayRankings(data.member_rankings);
+                    const rankingDate = new Date(data.member_rankings.last_updated);
+                    document.getElementById('ranking-update').textContent = 
+                        `순위 업데이트: ${rankingDate.toLocaleString('ko-KR')}`;
+                }
                 
                 // 마지막 업데이트 시간
                 if (data.last_collection) {
@@ -338,7 +504,7 @@
                 container.innerHTML = `
                     <div class="empty-state">
                         <div class="empty-state-icon">🔍</div>
-                        <p>아직 수집된 닉네임이 없습니다.<br>위의 "지금 수집하기" 버튼을 눌러보세요!</p>
+                        <p>아직 수집된 닉네임이 없습니다.<br>위의 "닉네임 수집" 버튼을 눌러보세요!</p>
                     </div>
                 `;
                 return;
@@ -347,6 +513,79 @@
             container.innerHTML = nicknames.map(nickname => 
                 `<div class="nickname-tag">${nickname}</div>`
             ).join('');
+        }
+
+        function displayRankings(rankings) {
+            // 게시글 순위 표시
+            displayPostRankings(rankings.posts || []);
+            // 댓글 순위 표시
+            displayCommentRankings(rankings.comments || []);
+        }
+
+        function displayPostRankings(posts) {
+            const container = document.getElementById('post-rankings');
+            
+            if (!posts || posts.length === 0) {
+                container.innerHTML = `
+                    <div class="empty-state">
+                        <div class="empty-state-icon">📝</div>
+                        <p>게시글 순위 데이터가 없습니다.</p>
+                    </div>
+                `;
+                return;
+            }
+            
+            container.innerHTML = posts.map((member, index) => {
+                const rankClass = index === 0 ? 'gold' : index === 1 ? 'silver' : index === 2 ? 'bronze' : '';
+                return `
+                    <div class="ranking-item">
+                        <div class="ranking-info">
+                            <div class="ranking-number ${rankClass}">${member.rank}</div>
+                            <div class="member-info">
+                                <div class="member-name">${member.nickName}</div>
+                                <div class="member-id">@${member.userId}</div>
+                            </div>
+                        </div>
+                        <div class="member-stats">
+                            <div class="stat-count">${member.post_count}</div>
+                            <div class="stat-type">게시글</div>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function displayCommentRankings(comments) {
+            const container = document.getElementById('comment-rankings');
+            
+            if (!comments || comments.length === 0) {
+                container.innerHTML = `
+                    <div class="empty-state">
+                        <div class="empty-state-icon">💭</div>
+                        <p>댓글 순위 데이터가 없습니다.</p>
+                    </div>
+                `;
+                return;
+            }
+            
+            container.innerHTML = comments.map((member, index) => {
+                const rankClass = index === 0 ? 'gold' : index === 1 ? 'silver' : index === 2 ? 'bronze' : '';
+                return `
+                    <div class="ranking-item">
+                        <div class="ranking-info">
+                            <div class="ranking-number ${rankClass}">${member.rank}</div>
+                            <div class="member-info">
+                                <div class="member-name">${member.nickName}</div>
+                                <div class="member-id">@${member.userId}</div>
+                            </div>
+                        </div>
+                        <div class="member-stats">
+                            <div class="stat-count">${member.comment_count}</div>
+                            <div class="stat-type">댓글</div>
+                        </div>
+                    </div>
+                `;
+            }).join('');
         }
 
         async function collectNow() {
@@ -370,7 +609,7 @@
                     // 성공 메시지
                     btn.innerHTML = '✅ 수집 완료!';
                     setTimeout(() => {
-                        btn.innerHTML = '🔄 지금 수집하기';
+                        btn.innerHTML = '🔄 닉네임 수집';
                         btn.disabled = false;
                         isCollecting = false;
                     }, 2000);
@@ -378,7 +617,7 @@
                     // 실패 시
                     btn.innerHTML = '❌ 수집 실패';
                     setTimeout(() => {
-                        btn.innerHTML = '🔄 지금 수집하기';
+                        btn.innerHTML = '🔄 닉네임 수집';
                         btn.disabled = false;
                         isCollecting = false;
                     }, 2000);
@@ -388,10 +627,79 @@
                 console.error('수집 실패:', error);
                 btn.innerHTML = '❌ 오류 발생';
                 setTimeout(() => {
-                    btn.innerHTML = '🔄 지금 수집하기';
+                    btn.innerHTML = '🔄 닉네임 수집';
                     btn.disabled = false;
                     isCollecting = false;
                 }, 2000);
+            }
+        }
+
+        async function fetchRankings() {
+            if (isFetchingRankings) return;
+            
+            const btn = document.getElementById('ranking-btn');
+            isFetchingRankings = true;
+            
+            // 버튼 상태 변경
+            btn.disabled = true;
+            btn.innerHTML = '<span class="loading"></span>순위 조회 중...';
+            
+            try {
+                const response = await fetch('/fetch-rankings');
+                const data = await response.json();
+                
+                if (data.success) {
+                    // 성공 시 순위 표시
+                    displayRankings(data.rankings);
+                    
+                    if (data.rankings.last_updated) {
+                        const rankingDate = new Date(data.rankings.last_updated);
+                        document.getElementById('ranking-update').textContent = 
+                            `순위 업데이트: ${rankingDate.toLocaleString('ko-KR')}`;
+                    }
+                    
+                    // 성공 메시지
+                    btn.innerHTML = '✅ 조회 완료!';
+                    setTimeout(() => {
+                        btn.innerHTML = '📈 순위 조회';
+                        btn.disabled = false;
+                        isFetchingRankings = false;
+                    }, 2000);
+                } else {
+                    // 실패 시
+                    btn.innerHTML = '❌ 조회 실패';
+                    setTimeout(() => {
+                        btn.innerHTML = '📈 순위 조회';
+                        btn.disabled = false;
+                        isFetchingRankings = false;
+                    }, 2000);
+                }
+                
+            } catch (error) {
+                console.error('순위 조회 실패:', error);
+                btn.innerHTML = '❌ 오류 발생';
+                setTimeout(() => {
+                    btn.innerHTML = '📈 순위 조회';
+                    btn.disabled = false;
+                    isFetchingRankings = false;
+                }, 2000);
+            }
+        }
+
+        async function refreshRankings() {
+            try {
+                const response = await fetch('/api/rankings');
+                const data = await response.json();
+                
+                if (data.last_updated) {
+                    displayRankings(data);
+                    const rankingDate = new Date(data.last_updated);
+                    document.getElementById('ranking-update').textContent = 
+                        `순위 업데이트: ${rankingDate.toLocaleString('ko-KR')}`;
+                }
+                
+            } catch (error) {
+                console.error('순위 새로고침 실패:', error);
             }
         }
     </script>
