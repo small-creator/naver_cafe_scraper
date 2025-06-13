@@ -4,7 +4,7 @@ import schedule
 import time
 import threading
 from datetime import datetime
-from flask import Flask, jsonify
+from flask import Flask, jsonify, render_template
 
 app = Flask(__name__)
 app.config['JSON_AS_ASCII'] = False  # 한글 제대로 출력
@@ -85,21 +85,39 @@ def run_scheduler():
         schedule.run_pending()
         time.sleep(60)
 
-# Flask 라우트들
+# ==================== 웹 대시보드 라우트 ====================
+
 @app.route('/')
-def home():
-    """홈페이지"""
-    return jsonify({
-        "service": "네이버 카페 닉네임 수집기",
-        "status": "실행 중",
-        "last_collection": collected_nicknames[-1]['collected_at'] if collected_nicknames else "아직 수집되지 않음",
-        "total_collections": len(collected_nicknames),
-        "endpoints": {
-            "latest": "/nicknames",
-            "all": "/all-nicknames",
-            "manual": "/collect-now"
-        }
-    })
+def dashboard():
+    """메인 대시보드 페이지"""
+    return render_template('dashboard.html')
+
+@app.route('/api/status')
+def api_status():
+    """대시보드용 상태 API"""
+    total_collections = len(collected_nicknames)
+    last_collection = collected_nicknames[-1] if collected_nicknames else None
+    
+    # 통계 계산
+    total_nicknames = sum(entry['count'] for entry in collected_nicknames)
+    unique_nicknames = set()
+    for entry in collected_nicknames:
+        unique_nicknames.update(entry['nicknames'])
+    
+    return app.response_class(
+        response=json.dumps({
+            "status": "running",
+            "total_collections": total_collections,
+            "total_nicknames": total_nicknames,
+            "unique_nicknames": len(unique_nicknames),
+            "last_collection": last_collection['collected_at'] if last_collection else None,
+            "recent_nicknames": last_collection['nicknames'] if last_collection else []
+        }, ensure_ascii=False, indent=2),
+        status=200,
+        mimetype='application/json; charset=utf-8'
+    )
+
+# ==================== 기존 API 라우트 ====================
 
 @app.route('/nicknames')
 def get_latest_nicknames():
@@ -132,11 +150,16 @@ def get_latest_nicknames():
 @app.route('/all-nicknames')
 def get_all_nicknames():
     """모든 수집 기록 조회"""
-    return jsonify({
+    response = {
         "success": True,
         "collections": collected_nicknames,
         "total_collections": len(collected_nicknames)
-    })
+    }
+    return app.response_class(
+        response=json.dumps(response, ensure_ascii=False, indent=2),
+        status=200,
+        mimetype='application/json; charset=utf-8'
+    )
 
 @app.route('/collect-now')
 def collect_now():
@@ -170,10 +193,15 @@ def collect_now():
 @app.route('/health')
 def health_check():
     """헬스 체크"""
-    return jsonify({
+    response = {
         "status": "healthy",
         "timestamp": datetime.now().isoformat()
-    })
+    }
+    return app.response_class(
+        response=json.dumps(response, ensure_ascii=False, indent=2),
+        status=200,
+        mimetype='application/json; charset=utf-8'
+    )
 
 if __name__ == "__main__":
     import os
@@ -186,6 +214,6 @@ if __name__ == "__main__":
     scheduler_thread = threading.Thread(target=run_scheduler, daemon=True)
     scheduler_thread.start()
     
-    # Flask 앱 실행 (Gunicorn과 개발서버 모두 대응)
+    # Flask 앱 실행
     port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=port, debug=False)
