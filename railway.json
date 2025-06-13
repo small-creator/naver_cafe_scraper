@@ -5,7 +5,6 @@
     "dockerfilePath": "Dockerfile"
   },
   "deploy": {
-    "startCommand": "python main.py",
-    "restartPolicyType": "never"
+    "restartPolicyType": "always"
   }
 }
