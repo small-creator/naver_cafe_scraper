@@ -92,9 +92,7 @@ def run_scheduler():
         schedule.run_pending()
         time.sleep(60)
 
-# ==================== Browserless NaverCafeManager 클래스 ====================
-# 기존 NaverCafeManager 클래스를 이 코드로 완전히 교체하세요
-
+# ==================== 간단한 NaverCafeManager ====================
 class NaverCafeManager:
     def __init__(self):
         self.browser = None
@@ -107,14 +105,13 @@ class NaverCafeManager:
         self.browserless_token = os.environ.get('BROWSERLESS_TOKEN', '')
         
         if self.browserless_domain:
-            # HTTP 방식으로 시도
             self.browserless_http = f"https://{self.browserless_domain}"
             print(f"🔄 Browserless HTTP 방식 준비: {self.browserless_domain}")
         else:
             self.browserless_http = None
 
     async def start_browser(self):
-        """브라우저 시작 - Browserless 우선, 실패시 로컬"""
+        """브라우저 시작"""
         if not PLAYWRIGHT_AVAILABLE:
             print("❌ Playwright 모듈이 설치되지 않았습니다")
             return False
@@ -145,7 +142,6 @@ class NaverCafeManager:
         try:
             import requests
             
-            # 세션 생성
             session_data = {
                 "timeout": 180000,
                 "viewport": {"width": 1024, "height": 768},
@@ -167,13 +163,12 @@ class NaverCafeManager:
                 
                 print(f"✅ Browserless 세션 생성: {session_id}")
                 
-                # CDP 연결
                 cdp_url = f"ws://{self.browserless_domain}/sessions/{session_id}?token={self.browserless_token}"
                 
                 self.browser = await self.playwright.chromium.connect_over_cdp(cdp_url)
                 self.context = await self.browser.new_context(
                     viewport={'width': 1024, 'height': 768},
-                    user_agent='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+                    user_agent='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
                 )
                 self.page = await self.context.new_page()
                 
@@ -199,7 +194,7 @@ class NaverCafeManager:
             
             self.context = await self.browser.new_context(
                 viewport={'width': 1024, 'height': 768},
-                user_agent='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+                user_agent='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
             )
             
             self.page = await self.context.new_page()
@@ -212,39 +207,34 @@ class NaverCafeManager:
             return False
 
     async def login_naver(self, username, password):
-        """간단한 네이버 로그인"""
+        """네이버 로그인"""
         try:
             print("🔐 네이버 로그인 시작...")
             
-            # 1. 로그인 페이지로 이동
             await self.page.goto('https://nid.naver.com/nidlogin.login')
             await self.page.wait_for_selector('#id', timeout=10000)
             
-            # 2. 아이디, 비밀번호 입력
             await self.page.fill('#id', username)
             await asyncio.sleep(1)
             await self.page.fill('#pw', password)
             await asyncio.sleep(1)
             
-            # 3. 로그인 버튼 클릭
             await self.page.click('#log\\.login')
             await asyncio.sleep(3)
             
             current_url = self.page.url
             print(f"로그인 후 URL: {current_url}")
             
-            # 4. 추가 인증 처리
             if 'auth' in current_url or 'login' in current_url:
                 print("⏳ 추가 인증 대기 중...")
                 timeout_count = 0
-                while timeout_count < 30:  # 최대 1분 대기
+                while timeout_count < 30:
                     await asyncio.sleep(2)
                     current_url = self.page.url
                     if 'naver.com' in current_url and 'login' not in current_url and 'auth' not in current_url:
                         break
                     timeout_count += 1
             
-            # 5. 로그인 성공 확인
             if 'naver.com' in current_url and 'login' not in current_url:
                 print("✅ 네이버 로그인 성공!")
                 return True
@@ -261,7 +251,6 @@ class NaverCafeManager:
         try:
             print("📊 게시글 순위 조회 중...")
             
-            # 날짜 설정
             if not start_date:
                 today = datetime.now()
                 if today.month == 1:
@@ -270,18 +259,15 @@ class NaverCafeManager:
                     last_month = today.replace(month=today.month - 1, day=1)
                 start_date = last_month.strftime('%Y-%m-%d')
             
-            # API URL
             api_url = (
                 f"https://cafe.stat.naver.com/api/cafe/{CAFE_ID}/rank/memberCreate"
                 f"?service=CAFE&timeDimension=MONTH&startDate={start_date}"
                 f"&memberId=%EB%A9%A4%EB%B2%84&exclude=member%2Cboard%2CdashBoard"
             )
             
-            # API 페이지로 이동
             await self.page.goto(api_url)
             await asyncio.sleep(2)
             
-            # JSON 데이터 추출
             json_data = await self.page.evaluate('''() => {
                 try {
                     const pre = document.querySelector('pre');
@@ -305,7 +291,7 @@ class NaverCafeManager:
             return []
 
     def parse_post_stats(self, data):
-        """게시글 순위 데이터 파싱 (naver_cafe_scraper.py 로직 사용)"""
+        """게시글 순위 데이터 파싱"""
         try:
             collected_members = []
             
@@ -325,7 +311,7 @@ class NaverCafeManager:
                         member_infos = member_infos_nested[0] if member_infos_nested and len(member_infos_nested) > 0 else []
                         
                         for i in range(len(member_ids)):
-                            if len(collected_members) >= 5:  # 상위 5명
+                            if len(collected_members) >= 5:
                                 break
                                 
                             try:
@@ -343,7 +329,6 @@ class NaverCafeManager:
                                     nick_name = member_info.get('nickName', '')
                                     member_level = member_info.get('memberLevelName', '')
                                     
-                                    # 제외 조건
                                     should_exclude = (
                                         nick_name == '수산나' or 
                                         member_level == '제휴업체'
@@ -377,7 +362,6 @@ class NaverCafeManager:
         try:
             print("💬 댓글 순위 조회 중...")
             
-            # 날짜 설정
             if not start_date:
                 today = datetime.now()
                 if today.month == 1:
@@ -386,18 +370,15 @@ class NaverCafeManager:
                     last_month = today.replace(month=today.month - 1, day=1)
                 start_date = last_month.strftime('%Y-%m-%d')
             
-            # API URL
             api_url = (
                 f"https://cafe.stat.naver.com/api/cafe/{CAFE_ID}/rank/memberComment"
                 f"?service=CAFE&timeDimension=MONTH&startDate={start_date}"
                 f"&memberId=%EB%A9%A4%EB%B2%84&exclude=member%2Cboard%2CdashBoard"
             )
             
-            # API 페이지로 이동
             await self.page.goto(api_url)
             await asyncio.sleep(2)
             
-            # JSON 데이터 추출
             json_data = await self.page.evaluate('''() => {
                 try {
                     const pre = document.querySelector('pre');
@@ -421,7 +402,7 @@ class NaverCafeManager:
             return []
 
     def parse_comment_stats(self, data):
-        """댓글 순위 데이터 파싱 (naver_cafe_scraper.py 로직 사용)"""
+        """댓글 순위 데이터 파싱"""
         try:
             collected_members = []
             
@@ -441,7 +422,7 @@ class NaverCafeManager:
                         member_infos = member_infos_nested[0] if member_infos_nested and len(member_infos_nested) > 0 else []
                         
                         for i in range(len(member_ids)):
-                            if len(collected_members) >= 3:  # 상위 3명
+                            if len(collected_members) >= 3:
                                 break
                                 
                             try:
@@ -459,7 +440,6 @@ class NaverCafeManager:
                                     nick_name = member_info.get('nickName', '')
                                     member_level = member_info.get('memberLevelName', '')
                                     
-                                    # 제외 조건
                                     should_exclude = (
                                         nick_name == '수산나' or 
                                         member_level == '제휴업체'
@@ -535,11 +515,9 @@ async def fetch_member_rankings():
             return False
         
         # 게시글 순위 조회
-        print("📊 게시글 순위 조회 중...")
         post_rankings = await naver_manager.get_post_rankings()
         
         # 댓글 순위 조회
-        print("💬 댓글 순위 조회 중...")
         comment_rankings = await naver_manager.get_comment_rankings()
         
         # 결과 저장
@@ -584,7 +562,7 @@ def dashboard():
     return jsonify({
         "status": "running",
         "message": "네이버 카페 닉네임 수집 서비스",
-        "version": "v3.0 (Browserless 통합 완료)",
+        "version": "v4.0 (구문 오류 해결 완료)",
         "features": {
             "nickname_collection": "✅ 활성화",
             "member_rankings": "✅ 활성화" if PLAYWRIGHT_AVAILABLE else "⚠️ Playwright 필요",
@@ -660,20 +638,6 @@ def get_latest_nicknames():
         mimetype='application/json; charset=utf-8'
     )
 
-@app.route('/all-nicknames')
-def get_all_nicknames():
-    """모든 수집 기록 조회"""
-    response = {
-        "success": True,
-        "collections": collected_nicknames,
-        "total_collections": len(collected_nicknames)
-    }
-    return app.response_class(
-        response=json.dumps(response, ensure_ascii=False, indent=2),
-        status=200,
-        mimetype='application/json; charset=utf-8'
-    )
-
 @app.route('/collect-now')
 def collect_now():
     """수동 수집"""
@@ -714,8 +678,7 @@ def get_rankings():
             "endpoints": {
                 "manual_fetch": "/fetch-rankings",
                 "rankings_data": "/api/rankings"
-            },
-            "instructions": "Playwright가 설치된 경우 /fetch-rankings 엔드포인트로 실제 순위를 조회할 수 있습니다."
+            }
         }, ensure_ascii=False, indent=2),
         status=200,
         mimetype='application/json; charset=utf-8'
@@ -729,29 +692,17 @@ def fetch_rankings_manual():
             response=json.dumps({
                 "success": False,
                 "message": "Playwright 모듈이 설치되지 않았습니다.",
-                "solution": "requirements.txt에 playwright==1.40.0을 추가하고 재배포하세요.",
-                "current_requirements": [
-                    "Flask==2.3.3",
-                    "requests==2.31.0", 
-                    "schedule==1.2.0",
-                    "gunicorn==21.2.0",
-                    "playwright==1.40.0  # ← 이 줄을 추가하세요"
-                ]
+                "solution": "requirements.txt에 playwright==1.40.0을 추가하고 재배포하세요."
             }, ensure_ascii=False, indent=2),
             status=200,
             mimetype='application/json; charset=utf-8'
         )
     
-    # 환경변수 체크
     if not os.environ.get('NAVER_USERNAME') or not os.environ.get('NAVER_PASSWORD'):
         return app.response_class(
             response=json.dumps({
                 "success": False,
-                "message": "네이버 로그인 정보가 설정되지 않았습니다.",
-                "missing_env_vars": [
-                    "NAVER_USERNAME" if not os.environ.get('NAVER_USERNAME') else None,
-                    "NAVER_PASSWORD" if not os.environ.get('NAVER_PASSWORD') else None
-                ]
+                "message": "네이버 로그인 정보가 설정되지 않았습니다."
             }, ensure_ascii=False, indent=2),
             status=200,
             mimetype='application/json; charset=utf-8'
@@ -809,7 +760,7 @@ def health_check():
         "status": "healthy",
         "timestamp": datetime.now().isoformat(),
         "service": "naver-cafe-nickname-collector",
-        "version": "3.0",
+        "version": "4.0",
         "uptime": "running",
         "modules": {
             "flask": "✅ 로드됨",
@@ -842,310 +793,8 @@ def health_check():
         mimetype='application/json; charset=utf-8'
     )
 
-# ==================== 디버깅 함수들 (추가) ====================
-
-sync def test_browser_connection():
-    """브라우저 연결만 테스트 (새로운 NaverCafeManager용)"""
-    naver_manager = NaverCafeManager()
-    
-    try:
-        print("🔧 브라우저 연결 테스트 시작...")
-        
-        # 브라우저 시작 테스트
-        success = await naver_manager.start_browser()
-        
-        if success:
-            print("✅ 브라우저 시작 성공")
-            
-            # 간단한 페이지 이동 테스트
-            await naver_manager.page.goto('https://www.naver.com', timeout=30000)
-            title = await naver_manager.page.title()
-            print(f"✅ 페이지 이동 성공: {title}")
-            
-            # Browserless 사용 여부 확인
-            browser_type = "Browserless" if naver_manager.browserless_http else "로컬 브라우저"
-            
-            return {
-                "playwright": "✅ 성공",
-                "browser_type": browser_type,
-                "page_load": f"✅ 성공 ({title})",
-                "status": "success"
-            }
-        else:
-            return {
-                "playwright": "❌ 실패",
-                "browser_type": "알 수 없음",
-                "page_load": "❌ 테스트 안됨",
-                "status": "browser_start_failed"
-            }
-            
-    except Exception as e:
-        print(f"❌ 브라우저 테스트 실패: {e}")
-        return {
-            "playwright": f"❌ 실패: {str(e)}",
-            "browser_type": "알 수 없음",
-            "page_load": "❌ 테스트 안됨",
-            "status": "failed"
-        }
-    finally:
-        await naver_manager.close()
-
-async def test_naver_login():
-    """네이버 로그인만 테스트 (새로운 NaverCafeManager용)"""
-    naver_manager = NaverCafeManager()
-    
-    try:
-        print("🔐 네이버 로그인 테스트 시작...")
-        
-        # 1. 브라우저 시작
-        if not await naver_manager.start_browser():
-            return {
-                "browser_start": "❌ 실패",
-                "login": "❌ 테스트 안됨",
-                "status": "browser_failed"
-            }
-        
-        print("✅ 브라우저 시작 성공")
-        
-        # 2. 네이버 메인 페이지 접근 테스트
-        await naver_manager.page.goto('https://www.naver.com', timeout=30000)
-        print("✅ 네이버 메인 페이지 접근 성공")
-        
-        # 3. 로그인 페이지 접근 테스트
-        await naver_manager.page.goto('https://nid.naver.com/nidlogin.login', timeout=30000)
-        
-        # 4. 로그인 폼 요소 확인
-        await naver_manager.page.wait_for_selector('#id', timeout=10000)
-        await naver_manager.page.wait_for_selector('#pw', timeout=10000)
-        print("✅ 로그인 폼 요소 확인됨")
-        
-        # 5. 실제 로그인 시도
-        username = os.environ.get('NAVER_USERNAME', '')
-        password = os.environ.get('NAVER_PASSWORD', '')
-        
-        if not username or not password:
-            return {
-                "browser_start": "✅ 성공",
-                "form_elements": "✅ 성공",
-                "login": "❌ 계정 정보 없음",
-                "status": "no_credentials"
-            }
-        
-        # 6. 로그인 실행
-        login_success = await naver_manager.login_naver(username, password)
-        
-        if login_success:
-            return {
-                "browser_start": "✅ 성공",
-                "form_elements": "✅ 성공", 
-                "login": "✅ 성공",
-                "final_url": naver_manager.page.url,
-                "status": "success"
-            }
-        else:
-            return {
-                "browser_start": "✅ 성공",
-                "form_elements": "✅ 성공",
-                "login": f"❌ 실패 (URL: {naver_manager.page.url})",
-                "status": "login_failed"
-            }
-            
-    except Exception as e:
-        print(f"❌ 네이버 로그인 테스트 실패: {e}")
-        return {
-            "error": str(e),
-            "status": "error"
-        }
-    finally:
-        await naver_manager.close()
-
-async def test_full_ranking_process():
-    """전체 멤버 순위 조회 프로세스 테스트"""
-    naver_manager = NaverCafeManager()
-    
-    try:
-        print("🏆 전체 순위 조회 프로세스 테스트 시작...")
-        
-        # 1. 브라우저 시작
-        if not await naver_manager.start_browser():
-            return {
-                "browser_start": "❌ 실패",
-                "login": "❌ 테스트 안됨",
-                "post_rankings": "❌ 테스트 안됨",
-                "comment_rankings": "❌ 테스트 안됨",
-                "status": "browser_failed"
-            }
-        
-        # 2. 네이버 로그인
-        username = os.environ.get('NAVER_USERNAME', '')
-        password = os.environ.get('NAVER_PASSWORD', '')
-        
-        if not username or not password:
-            return {
-                "browser_start": "✅ 성공",
-                "login": "❌ 계정 정보 없음",
-                "post_rankings": "❌ 테스트 안됨",
-                "comment_rankings": "❌ 테스트 안됨",
-                "status": "no_credentials"
-            }
-        
-        login_success = await naver_manager.login_naver(username, password)
-        
-        if not login_success:
-            return {
-                "browser_start": "✅ 성공",
-                "login": "❌ 실패",
-                "post_rankings": "❌ 테스트 안됨",
-                "comment_rankings": "❌ 테스트 안됨",
-                "status": "login_failed"
-            }
-        
-        # 3. 게시글 순위 조회
-        post_rankings = await naver_manager.get_post_rankings()
-        
-        # 4. 댓글 순위 조회
-        comment_rankings = await naver_manager.get_comment_rankings()
-        
-        return {
-            "browser_start": "✅ 성공",
-            "login": "✅ 성공",
-            "post_rankings": f"✅ 성공 ({len(post_rankings)}명)",
-            "comment_rankings": f"✅ 성공 ({len(comment_rankings)}명)",
-            "post_data": post_rankings[:2] if post_rankings else [],  # 상위 2명만 미리보기
-            "comment_data": comment_rankings[:2] if comment_rankings else [],  # 상위 2명만 미리보기
-            "status": "success"
-        }
-        
-    except Exception as e:
-        print(f"❌ 전체 프로세스 테스트 실패: {e}")
-        return {
-            "error": str(e),
-            "status": "error"
-        }
-    finally:
-        await naver_manager.close()
-
-# ==================== 디버깅 Flask 라우트들 (추가) ====================
-
-@app.route('/debug/browser')
-def debug_browser():
-    """브라우저 연결 디버깅"""
-    try:
-        result = run_async_task(test_browser_connection())
-        return app.response_class(
-            response=json.dumps({
-                "test": "browser_connection",
-                "timestamp": datetime.now().isoformat(),
-                "result": result,
-                "environment": {
-                    "browserless_domain": os.environ.get('BROWSERLESS_PUBLIC_DOMAIN', 'NOT_SET'),
-                    "browserless_token": "SET" if os.environ.get('BROWSERLESS_TOKEN') else "NOT_SET"
-                }
-            }, ensure_ascii=False, indent=2),
-            status=200,
-            mimetype='application/json; charset=utf-8'
-        )
-    except Exception as e:
-        return app.response_class(
-            response=json.dumps({
-                "test": "browser_connection",
-                "error": str(e),
-                "status": "exception"
-            }, ensure_ascii=False, indent=2),
-            status=500,
-            mimetype='application/json; charset=utf-8'
-        )
-
-@app.route('/debug/login')
-def debug_login():
-    """네이버 로그인 디버깅"""
-    try:
-        result = run_async_task(test_naver_login())
-        return app.response_class(
-            response=json.dumps({
-                "test": "naver_login",
-                "timestamp": datetime.now().isoformat(),
-                "result": result,
-                "environment": {
-                    "naver_username": "SET" if os.environ.get('NAVER_USERNAME') else "NOT_SET",
-                    "naver_password": "SET" if os.environ.get('NAVER_PASSWORD') else "NOT_SET"
-                }
-            }, ensure_ascii=False, indent=2),
-            status=200,
-            mimetype='application/json; charset=utf-8'
-        )
-    except Exception as e:
-        return app.response_class(
-            response=json.dumps({
-                "test": "naver_login", 
-                "error": str(e),
-                "status": "exception"
-            }, ensure_ascii=False, indent=2),
-            status=500,
-            mimetype='application/json; charset=utf-8'
-        )
-
-@app.route('/debug/environment')
-def debug_environment():
-    """환경변수 및 설정 디버깅"""
-    return app.response_class(
-        response=json.dumps({
-            "test": "environment_check",
-            "timestamp": datetime.now().isoformat(),
-            "modules": {
-                "playwright_available": PLAYWRIGHT_AVAILABLE,
-                "playwright_version": "1.40.0" if PLAYWRIGHT_AVAILABLE else "NOT_INSTALLED"
-            },
-            "environment_variables": {
-                "PORT": os.environ.get('PORT', 'NOT_SET'),
-                "BROWSERLESS_PUBLIC_DOMAIN": os.environ.get('BROWSERLESS_PUBLIC_DOMAIN', 'NOT_SET'),
-                "BROWSERLESS_TOKEN": "SET" if os.environ.get('BROWSERLESS_TOKEN') else "NOT_SET", 
-                "NAVER_USERNAME": "SET" if os.environ.get('NAVER_USERNAME') else "NOT_SET",
-                "NAVER_PASSWORD": "SET" if os.environ.get('NAVER_PASSWORD') else "NOT_SET"
-            },
-            "browserless_config": {
-                "domain": os.environ.get('BROWSERLESS_PUBLIC_DOMAIN', 'NOT_SET'),
-                "endpoint": f"wss://{os.environ.get('BROWSERLESS_PUBLIC_DOMAIN', 'NOT_SET')}/playwright?token=***" if os.environ.get('BROWSERLESS_PUBLIC_DOMAIN') else "NOT_CONFIGURED"
-            },
-            "recommendations": [
-                "1. /debug/browser 로 브라우저 연결 테스트",
-                "2. /debug/login 으로 네이버 로그인 테스트", 
-                "3. Railway 로그에서 상세 오류 메시지 확인"
-            ]
-        }, ensure_ascii=False, indent=2),
-        status=200,
-        mimetype='application/json; charset=utf-8'
-    )
-
-@app.route('/debug/full-test')
-def debug_full_test():
-    """전체 프로세스 테스트"""
-    try:
-        result = run_async_task(test_full_ranking_process())
-        return app.response_class(
-            response=json.dumps({
-                "test": "full_ranking_process",
-                "timestamp": datetime.now().isoformat(),
-                "result": result
-            }, ensure_ascii=False, indent=2),
-            status=200,
-            mimetype='application/json; charset=utf-8'
-        )
-    except Exception as e:
-        return app.response_class(
-            response=json.dumps({
-                "test": "full_ranking_process",
-                "error": str(e),
-                "status": "exception"
-            }, ensure_ascii=False, indent=2),
-            status=500,
-            mimetype='application/json; charset=utf-8'
-        )
-        
-# 기존 if __name__ == "__main__": 부분은 그대로 유지하세요
-
 if __name__ == "__main__":
-    print("🚀 네이버 카페 닉네임 수집 서비스 시작 v3.0")
+    print("🚀 네이버 카페 닉네임 수집 서비스 시작 v4.0")
     print("📋 기능: 닉네임 자동수집, 멤버 순위 조회, Browserless 통합")
     
     # 모듈 상태 확인
@@ -1173,6 +822,6 @@ if __name__ == "__main__":
     print("   • GET  /nicknames         - 최근 닉네임")
     print("   • GET  /collect-now       - 수동 닉네임 수집")
     print("   • GET  /api/rankings      - 순위 데이터 조회")
-    print("   • GET  /fetch-rankings    - 수동 순위 수집")
+    print("   • GET  /fetch-rankings    - 🎯 멤버 순위 수집!")
     
     app.run(host="0.0.0.0", port=port, debug=False)
